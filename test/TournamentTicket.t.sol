@@ -20,7 +20,7 @@ contract TournamentTicketTest is Test {
     }
 
     function test_RevertWhen_NoActiveTournament() public {
-        // Создаем новый экземпляр контракта без активного турнира
+        // Create a new contract instance without an active tournament
         TournamentTicket newTicket = new TournamentTicket(0.01 ether, treasury);
         vm.prank(user);
         vm.expectRevert("No active tournament");
@@ -28,19 +28,19 @@ contract TournamentTicketTest is Test {
     }
 
     function testBuyTicket() public {
-        // Ожидаем событие о покупке билета
+        // Expect a ticket purchase event
         vm.expectEmit(true, true, true, true);
         emit TournamentTicket.TicketPurchased(user, TOURNEY_ID);
 
-        // Пользователь покупает билет
+        // User buys a ticket
         vm.prank(user);
         ticket.buyTicket{value: 0.01 ether}();
 
-        // Проверяем, что у пользователя теперь есть билет
+        // Check that the user now has a ticket
         assertTrue(ticket.hasTicket(user));
-        // Проверяем, что баланс контракта увеличился на цену билета
+        // Check that the contract balance has increased by the ticket price
         assertEq(address(ticket).balance, 0.01 ether);
-        // Проверяем, что количество участников стало 1
+        // Check that the number of participants is 1
         assertEq(ticket.getParticipants().length, 1);
     }
 
@@ -82,10 +82,10 @@ contract TournamentTicketTest is Test {
         vm.prank(user);
         ticket.buyTicket{value: 0.01 ether}();
 
-        // Пользователь не должен иметь билет на "season-2"
-        // т.к. мы еще не стартовали этот турнир
-        // и hasTicket смотрит на currentTournamentId, который сейчас "season-1"
-        // для этого нам нужно сначала переключить участника на другого
+        // The user should not have a ticket for "season-2"
+        // because we haven't started that tournament yet
+        // and hasTicket checks the currentTournamentId, which is currently "season-1".
+        // For this, we first need to switch to another user.
         vm.prank(otherUser);
         assertFalse(ticket.hasTicket(otherUser));
 
@@ -95,9 +95,9 @@ contract TournamentTicketTest is Test {
 
         assertEq(ticket.getCurrentTournamentId(), newTournamentId);
 
-        // У пользователя не должно быть билета в новом турнире
+        // The user should not have a ticket in the new tournament
         assertFalse(ticket.hasTicket(user));
-        // Количество участников в новом турнире должно быть 0
+        // The number of participants in the new tournament should be 0
         assertEq(ticket.getParticipants().length, 0);
     }
 
