@@ -41,7 +41,7 @@ contract TournamentTicketTest is Test {
         // Check that the contract balance has increased by the ticket price
         assertEq(address(ticket).balance, 0.01 ether);
         // Check that the number of participants is 1
-        assertEq(ticket.getParticipants().length, 1);
+        assertEq(ticket.getParticipantsCount(), 1);
     }
 
     function test_RevertWhen_DoubleBuy() public {
@@ -98,7 +98,7 @@ contract TournamentTicketTest is Test {
         // The user should not have a ticket in the new tournament
         assertFalse(ticket.hasTicket(user));
         // The number of participants in the new tournament should be 0
-        assertEq(ticket.getParticipants().length, 0);
+        assertEq(ticket.getParticipantsCount(), 0);
     }
 
     function testSetTicketPrice() public {

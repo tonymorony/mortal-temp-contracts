@@ -43,8 +43,12 @@ contract TournamentTicket is Ownable {
         return currentTournamentId;
     }
 
-    function getParticipants() external view returns (address[] memory) {
-        return tournamentParticipants[currentTournamentId];
+    function getParticipant(uint256 index) external view returns (address) {
+        return tournamentParticipants[currentTournamentId][index];
+    }
+
+    function getParticipantsCount() external view returns (uint256) {
+        return tournamentParticipants[currentTournamentId].length;
     }
 
     function startNewTournament(string memory newTournamentId) external onlyOwner {
