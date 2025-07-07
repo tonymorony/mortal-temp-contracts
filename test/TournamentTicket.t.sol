@@ -10,16 +10,27 @@ contract TournamentTicketTest is Test {
     address user = address(0x1234);
     address otherUser = address(0x4567);
 
+    string constant TOURNEY_ID = "season-1";
+
     function setUp() public {
         ticket = new TournamentTicket(0.01 ether, treasury);
         vm.deal(user, 1 ether);
         vm.deal(otherUser, 1 ether);
+        ticket.startNewTournament(TOURNEY_ID);
+    }
+
+    function test_RevertWhen_NoActiveTournament() public {
+        // Создаем новый экземпляр контракта без активного турнира
+        TournamentTicket newTicket = new TournamentTicket(0.01 ether, treasury);
+        vm.prank(user);
+        vm.expectRevert("No active tournament");
+        newTicket.buyTicket{value: 0.01 ether}();
     }
 
     function testBuyTicket() public {
         // Ожидаем событие о покупке билета
         vm.expectEmit(true, true, true, true);
-        emit TournamentTicket.TicketPurchased(user, ticket.getCurrentTournamentId());
+        emit TournamentTicket.TicketPurchased(user, TOURNEY_ID);
 
         // Пользователь покупает билет
         vm.prank(user);
@@ -67,15 +78,27 @@ contract TournamentTicketTest is Test {
         assertEq(afterBal - before, 0.01 ether);
     }
 
-    function testStartNewTournamentClearsTickets() public {
+    function testStartNewTournament() public {
         vm.prank(user);
         ticket.buyTicket{value: 0.01 ether}();
 
-        vm.prank(ticket.owner());
-        ticket.startNewTournament("season-2");
+        // Пользователь не должен иметь билет на "season-2"
+        // т.к. мы еще не стартовали этот турнир
+        // и hasTicket смотрит на currentTournamentId, который сейчас "season-1"
+        // для этого нам нужно сначала переключить участника на другого
+        vm.prank(otherUser);
+        assertFalse(ticket.hasTicket(otherUser));
 
+        string memory newTournamentId = "season-2";
+        vm.prank(ticket.owner());
+        ticket.startNewTournament(newTournamentId);
+
+        assertEq(ticket.getCurrentTournamentId(), newTournamentId);
+
+        // У пользователя не должно быть билета в новом турнире
         assertFalse(ticket.hasTicket(user));
-        assertEq(ticket.getCurrentTournamentId(), "season-2");
+        // Количество участников в новом турнире должно быть 0
+        assertEq(ticket.getParticipants().length, 0);
     }
 
     function testSetTicketPrice() public {
@@ -100,6 +123,12 @@ contract TournamentTicketTest is Test {
         vm.prank(ticket.owner());
         vm.expectRevert("Tournament ID required");
         ticket.startNewTournament("");
+    }
+
+    function test_RevertWhen_StartTournamentWithExistingId() public {
+        vm.prank(ticket.owner());
+        vm.expectRevert("Tournament with this ID already exists");
+        ticket.startNewTournament(TOURNEY_ID);
     }
 
     function test_RevertWhen_WithdrawEmpty() public {
