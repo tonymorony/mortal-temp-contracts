@@ -1,8 +1,6 @@
 # 🏆 Mortal Contracts — Smart Contracts for Tournament Platform (EVM, Solidity)
 
-* Tournament Entry contract on Core Testnet: https://scan.test2.btcs.network/address/0x65e86F9364C65e0A0AF78542b634226B706A42d2#code
-* Tickets bundles contract on Core testnet: https://scan.test2.btcs.network/address/0x24686e2FED75806e4155D15174D7e2D523a22e25#code
-* Free tickets claim contract on Core Testnet: https://scan.test2.btcs.network/address/0x9528A8962A817584632019b80786eF8A1008DD12#code 
+
 
 ## 📄 Specification
 
