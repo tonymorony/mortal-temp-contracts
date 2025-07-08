@@ -1,55 +1,89 @@
-* Tournament Entry contract on Core Testnet: https://scan.test2.btcs.network/address/0x65e86F9364C65e0A0AF78542b634226B706A42d2#code
-* Tickets bundles contract on Core testnet: https://scan.test2.btcs.network/address/0x24686e2FED75806e4155D15174D7e2D523a22e25#code
-* Free tickets claim contract on Core Testnet: https://scan.test2.btcs.network/address/0x9528A8962A817584632019b80786eF8A1008DD12#code 
+# 🏆 Mortal Contracts — Smart Contracts for Tournament Platform (EVM, Solidity)
 
-# 🏆 TournamentTicket — ETH Tournament Access via Smart Contract (EVM, Solidity)
+
 
 ## 📄 Specification
 
 ### 🎯 Purpose
 
-Implement a smart contract where players can **buy a ticket for a tournament using ETH**. Only after buying the ticket their points will be counted in the leaderboard. Tickets are valid only for the current tournament.
+This project contains a set of smart contracts for managing a tournament platform. Players can buy tickets for tournaments using ETH, purchase ticket bundles, and claim free tickets. The contracts are designed to be secure, gas-efficient, and easily integrable with a backend service.
 
 ---
 
-### ⚙️ Logic Overview
+### 1. `TournamentTicket.sol`
 
-- The tournament has a unique ID (e.g. `"season1"`, `"s2025_06"`).
-- To participate, a player must pay a fixed ETH amount (e.g. `0.01 ether`).
-- Without a ticket, the player can fight, but their score won't enter the leaderboard.
-- When a new tournament starts, all previous tickets are invalidated.
+A contract where players can **buy a ticket for a tournament using ETH**. Only after buying the ticket will their points be counted in the leaderboard. The contract supports multiple concurrent tournaments and keeps a history of participants for each.
+
+#### ⚙️ Logic Overview
+
+- The system can manage multiple tournaments, each identified by a unique ID (e.g., `"season1"`, `"s2025_06"`).
+- The admin sets the active tournament by calling `startNewTournament(id)`.
+- To participate in the **current** tournament, a player must pay a fixed ETH amount.
+- The contract is designed to be gas-efficient, avoiding loops over large arrays. Participant lists are accessed via pagination (`getParticipantsCount` and `getParticipant`).
+- When a new tournament becomes active, tickets for previous tournaments remain in the contract's history but are not valid for the current one.
 - ETH from ticket sales is sent to a designated treasury address.
 
----
+#### 📌 Key Functions
 
-### 📌 Key Functions
-
-#### 🔹 Admin
+##### Admin
 
 | Function | Description |
 |---------|-------------|
-| `startNewTournament(string memory id)` | Sets a new tournament ID and clears previous tickets |
-| `setTicketPrice(uint256 priceInWei)` | Sets the ticket price in ETH |
-| `setTreasury(address payable treasuryAddr)` | Sets the treasury address |
-| `withdraw()` | (Optional) Manually withdraws ETH from the contract to treasury |
+| `startNewTournament(string memory id)` | Sets a new tournament ID. Reverts if the ID already exists. |
+| `setTicketPrice(uint256 priceInWei)` | Sets the ticket price in ETH. |
+| `setTreasury(address payable treasuryAddr)` | Sets the treasury address. |
+| `withdraw()` | Manually withdraws ETH from the contract to the treasury. |
 
-#### 🔹 User
+##### User
 
 | Function | Description |
 |---------|-------------|
-| `buyTicket()` | Pays for a tournament ticket (`msg.value == ticketPrice`) |
-| `hasTicket(address user)` → `bool` | Checks if the user has a valid ticket |
-| `getCurrentTournamentId()` → `string` | Returns current tournament ID |
+| `buyTicket()` | Pays for a ticket for the **current** tournament. |
+| `hasTicket(address user)` → `bool` | Checks if the user has a valid ticket for the **current** tournament. |
+| `getCurrentTournamentId()` → `string` | Returns the current tournament ID. |
+| `getParticipantsCount()` → `uint256` | Returns the number of participants for the current tournament. |
+| `getParticipant(uint256 index)` → `address` | Returns a participant's address by index for the current tournament. |
 
 ---
 
-### 💰 Payment Logic
+### 2. `ClaimLogger.sol`
 
-- `ticketPrice` is set in **wei**.
-- On `buyTicket()`:
-  - Checks that `msg.value == ticketPrice`
-  - Checks that the user hasn't bought a ticket yet
-  - ETH is sent to the treasury address
+A simple contract to protect against spam when distributing free tickets.
+
+#### ⚙️ Logic Overview
+
+This contract uses a "proof-of-action" mechanism for spam protection, using the blockchain as a verifier.
+
+1.  **On-Chain Action:** A user calls the `claim()` function. This transaction requires no funds (other than gas) and emits a `Claimed(user, timestamp)` event.
+2.  **Backend Request:** After the transaction is confirmed, the frontend sends a request to the backend to issue the ticket.
+3.  **Backend Verification:** The backend verifies that a recent `Claimed` event was emitted by this user. If so, the backend issues a ticket in its own database.
+
+This approach keeps ticket logic off-chain, using the blockchain as a cheap way to guard against automated requests.
+
+---
+
+### 3. `TicketBundle.sol`
+
+A separate contract for bulk ticket purchases, allowing admins to create and manage ticket packages.
+
+#### ⚙️ Logic Overview
+
+1.  **Admin Setup:** An admin calls `setPackage()` to define a package's ID, ticket count, and price. Admins can also deactivate packages.
+2.  **Listing Packages:** A frontend application can call `getAllPackages()` to retrieve a list of all available ticket packages.
+3.  **User Purchase:** A user calls `buyPackage(packageId)`, sending the required ETH.
+4.  **On-Chain Record & Security:** The contract records the purchase and forwards the ETH to the treasury. The `buyPackage` function is protected against **re-entrancy attacks** using OpenZeppelin's `ReentrancyGuard`.
+5.  **Backend Validation:** A backend service can query the contract using `getPurchaseCount(user, packageId)` to verify the purchase and credit tickets to the user's account off-chain.
+
+#### 📌 Key Functions
+
+| Function | Description |
+|---------|-------------|
+| `setPackage(uint256, uint256, uint256, bool)` | Creates or updates a ticket package. |
+| `removePackage(uint256)` | Deactivates a package and hides it from the public list. |
+| `setTreasury(address payable)` | Sets the treasury address. |
+| `buyPackage(uint256)` | Pays for a ticket package. Protected against re-entrancy. |
+| `getAllPackages()` | Returns details for all available packages. |
+| `getPurchaseCount(address, uint256)` | Checks how many times a user has bought a specific package. |
 
 ---
 
@@ -57,89 +91,14 @@ Implement a smart contract where players can **buy a ticket for a tournament usi
 
 | Check | Detail |
 |-------|--------|
-| 🔒 Double buy | Forbidden — triggers `revert` |
-| 🔒 Invalid ETH amount | Any deviation triggers `revert` |
-| 🔒 Admin access | Only `owner` can call admin functions |
-| 🔒 Ticket reset | All previous tickets become invalid when a new tournament starts |
+| 🔒 Double Buy | A user cannot buy more than one ticket per tournament. |
+| 🔒 Re-entrancy | `TicketBundle.buyPackage` is protected with `ReentrancyGuard`. |
+| 🔒 Gas Limits | Loops over unbounded arrays are avoided to prevent out-of-gas errors. |
+| 🔒 Admin Access | Critical functions are restricted to the `owner`. |
+| 🔒 Ticket Validity | Tickets are tied to a specific tournament ID. |
 
----
-
-### 🎁 Free Ticket Claim (Spam Protection)
-
-To distribute free tickets (e.g., for completing tasks or as part of promotional events), a "proof-of-action" mechanism is used for spam protection. This allows for issuing tickets in an off-chain database, using the blockchain only as a verifier.
-
-**Logic:**
-1.  **On-Chain Action:** A user calls the `claim()` function in the `ClaimLogger.sol` contract. This transaction requires no funds (other than gas fees) and emits a `Claimed(user, timestamp)` event.
-2.  **Backend Request:** After the transaction is confirmed, the frontend sends a request to the backend to issue the ticket.
-3.  **Backend Verification:** The backend verifies that a recent `Claimed` event was emitted by this user. If the event is found, the backend issues a ticket in its own database.
-
-This approach keeps all ticket logic off-chain (for now), using the blockchain as a reliable and cheap method to protect against automated requests.
-
----
-
-### 🎟️ Ticket Bundles (Paid Packages)
-
-To allow for bulk ticket purchases, a separate `TicketBundle.sol` contract is used. It enables admins to create and manage ticket packages that users can buy directly.
-
-**Logic:**
-1.  **Admin Setup:** An admin calls `setPackage()` to define a package's ID, ticket count, and price. Admins can also deactivate and hide packages using `removePackage()`.
-2.  **Listing Packages:** A frontend application can call `getAllPackages()` to retrieve a complete list of all available ticket packages and display them to users.
-3.  **User Purchase:** A user calls the `buyPackage(packageId)` function, sending the exact amount of ETH required for that package.
-4.  **On-Chain Record:** The contract records the purchase, linking the user's address to the package ID. The ETH is forwarded to the treasury.
-5.  **Backend Validation:** A backend service can query the contract using `getPurchaseCount(user, packageId)` to verify the purchase and credit the corresponding number of tickets to the user's account off-chain.
-
-This system provides a flexible way to sell tickets in bundles, with on-chain verification for backend systems.
-
-#### 🔹 Key Functions (`TicketBundle.sol`)
-
-| Function | Description |
-|---------|-------------|
-| `setPackage(uint256, uint256, uint256, bool)` | Creates or updates a ticket package. |
-| `removePackage(uint256)` | Deactivates a package and hides it from the public list. |
-| `setTreasury(address payable)` | Sets the treasury address. |
-| `buyPackage(uint256)` | Pays for a ticket package. |
-| `getAllPackages()` | Returns details for all available packages. |
-| `getPurchaseCount(address, uint256)` | Checks how many times a user has bought a specific package. |
-
----
-
-### 🧪 Test Cases
-
-| Test | Expected behavior |
-|------|--------------------|
-| ✅ `buyTicket()` | Purchase succeeds, `hasTicket(user)` → `true` |
-| 🚫 Re-buy ticket | `revert` |
-| 🚫 Wrong `msg.value` | `revert` |
-| ✅ `startNewTournament()` | Resets all ticket states |
-| ✅ Treasury receives ETH | ETH successfully transferred |
-
----
-
-### 📝 Interface (ABI)
-
-```solidity
-function buyTicket() external payable;
-function hasTicket(address user) external view returns (bool);
-function getCurrentTournamentId() external view returns (string memory);
-
-function startNewTournament(string memory id) external onlyOwner;
-function setTicketPrice(uint256 priceInWei) external onlyOwner;
-function setTreasury(address payable treasuryAddr) external onlyOwner;
-function withdraw() external onlyOwner;
-```
-
----
-
-### 🚀 Optional Improvements (Post-MVP)
-
-| Idea | Value |
-|------|-------|
-| `event TicketPurchased(address user, string tournamentId)` | Easy frontend sync |
-| NFT-based tickets | Tradable visual tickets |
-| Time-based restriction | Tournament start/end timestamps |
-| Ticket cap | Bot protection / participant limit |
-
----
+<details>
+<summary>Foundry Documentation</summary>
 
 # 🛠 Foundry
 
@@ -211,6 +170,7 @@ forge --help
 anvil --help
 cast --help
 ```
+</details>
 
 ---
 
@@ -218,12 +178,24 @@ cast --help
 
 ```
 .
-├── src/                     # Contracts
+├── lib
+│   ├── forge-std
+│   └── openzeppelin-contracts
+├── script
+│   ├── Counter.s.sol
+│   ├── Deploy.s.sol
+│   ├── DeployClaimLogger.s.sol
+│   └── DeployTicketBundle.s.sol
+├── src
+│   ├── ClaimLogger.sol
+│   ├── Counter.sol
+│   ├── TicketBundle.sol
 │   └── TournamentTicket.sol
-├── test/                    # Test suite
+├── test
+│   ├── ClaimLogger.t.sol
+│   ├── Counter.t.sol
+│   ├── TicketBundle.t.sol
 │   └── TournamentTicket.t.sol
-├── script/                  # Deployment scripts
-│   └── Deploy.s.sol
-├── foundry.toml            # Foundry config
-└── README.md               # This file
+├── foundry.toml
+└── README.md
 ```

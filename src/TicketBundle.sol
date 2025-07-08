@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title TicketBundle
@@ -11,7 +12,7 @@ import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
  * Users can buy these packages, and the purchase information is stored on-chain
  * for backend validation.
  */
-contract TicketBundle is Ownable {
+contract TicketBundle is Ownable, ReentrancyGuard {
     struct Package {
         uint256 ticketCount;
         uint256 priceInWei;
@@ -62,7 +63,7 @@ contract TicketBundle is Ownable {
         emit PackageRemoved(packageId);
     }
 
-    function buyPackage(uint256 packageId) external payable {
+    function buyPackage(uint256 packageId) external payable nonReentrant {
         Package storage currentPackage = packages[packageId];
         require(currentPackage.isActive, "Package is not active");
         require(currentPackage.priceInWei > 0, "Package price must be greater than 0");

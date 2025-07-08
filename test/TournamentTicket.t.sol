@@ -10,27 +10,38 @@ contract TournamentTicketTest is Test {
     address user = address(0x1234);
     address otherUser = address(0x4567);
 
+    string constant TOURNEY_ID = "season-1";
+
     function setUp() public {
         ticket = new TournamentTicket(0.01 ether, treasury);
         vm.deal(user, 1 ether);
         vm.deal(otherUser, 1 ether);
+        ticket.startNewTournament(TOURNEY_ID);
+    }
+
+    function test_RevertWhen_NoActiveTournament() public {
+        // Create a new contract instance without an active tournament
+        TournamentTicket newTicket = new TournamentTicket(0.01 ether, treasury);
+        vm.prank(user);
+        vm.expectRevert("No active tournament");
+        newTicket.buyTicket{value: 0.01 ether}();
     }
 
     function testBuyTicket() public {
-        // Ожидаем событие о покупке билета
+        // Expect a ticket purchase event
         vm.expectEmit(true, true, true, true);
-        emit TournamentTicket.TicketPurchased(user, ticket.getCurrentTournamentId());
+        emit TournamentTicket.TicketPurchased(user, TOURNEY_ID);
 
-        // Пользователь покупает билет
+        // User buys a ticket
         vm.prank(user);
         ticket.buyTicket{value: 0.01 ether}();
 
-        // Проверяем, что у пользователя теперь есть билет
+        // Check that the user now has a ticket
         assertTrue(ticket.hasTicket(user));
-        // Проверяем, что баланс контракта увеличился на цену билета
+        // Check that the contract balance has increased by the ticket price
         assertEq(address(ticket).balance, 0.01 ether);
-        // Проверяем, что количество участников стало 1
-        assertEq(ticket.getParticipants().length, 1);
+        // Check that the number of participants is 1
+        assertEq(ticket.getParticipantsCount(), 1);
     }
 
     function test_RevertWhen_DoubleBuy() public {
@@ -67,15 +78,27 @@ contract TournamentTicketTest is Test {
         assertEq(afterBal - before, 0.01 ether);
     }
 
-    function testStartNewTournamentClearsTickets() public {
+    function testStartNewTournament() public {
         vm.prank(user);
         ticket.buyTicket{value: 0.01 ether}();
 
-        vm.prank(ticket.owner());
-        ticket.startNewTournament("season-2");
+        // The user should not have a ticket for "season-2"
+        // because we haven't started that tournament yet
+        // and hasTicket checks the currentTournamentId, which is currently "season-1".
+        // For this, we first need to switch to another user.
+        vm.prank(otherUser);
+        assertFalse(ticket.hasTicket(otherUser));
 
+        string memory newTournamentId = "season-2";
+        vm.prank(ticket.owner());
+        ticket.startNewTournament(newTournamentId);
+
+        assertEq(ticket.getCurrentTournamentId(), newTournamentId);
+
+        // The user should not have a ticket in the new tournament
         assertFalse(ticket.hasTicket(user));
-        assertEq(ticket.getCurrentTournamentId(), "season-2");
+        // The number of participants in the new tournament should be 0
+        assertEq(ticket.getParticipantsCount(), 0);
     }
 
     function testSetTicketPrice() public {
@@ -100,6 +123,12 @@ contract TournamentTicketTest is Test {
         vm.prank(ticket.owner());
         vm.expectRevert("Tournament ID required");
         ticket.startNewTournament("");
+    }
+
+    function test_RevertWhen_StartTournamentWithExistingId() public {
+        vm.prank(ticket.owner());
+        vm.expectRevert("Tournament with this ID already exists");
+        ticket.startNewTournament(TOURNEY_ID);
     }
 
     function test_RevertWhen_WithdrawEmpty() public {

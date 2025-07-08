@@ -8,8 +8,9 @@ contract TournamentTicket is Ownable {
     string public currentTournamentId;
     address payable public treasury;
 
-    mapping(address => bool) private tickets;
-    address[] private participants;
+    mapping(string => mapping(address => bool)) private tournamentTickets;
+    mapping(string => address[]) private tournamentParticipants;
+    mapping(string => bool) public startedTournaments;
 
     event TicketPurchased(address indexed user, string tournamentId);
     event TournamentStarted(string tournamentId);
@@ -24,36 +25,38 @@ contract TournamentTicket is Ownable {
     }
 
     function buyTicket() external payable {
+        require(bytes(currentTournamentId).length > 0, "No active tournament");
         require(msg.value == ticketPrice, "Incorrect ETH amount");
-        require(!tickets[msg.sender], "Ticket already purchased");
+        require(!tournamentTickets[currentTournamentId][msg.sender], "Ticket already purchased");
 
-        tickets[msg.sender] = true;
-        participants.push(msg.sender);
+        tournamentTickets[currentTournamentId][msg.sender] = true;
+        tournamentParticipants[currentTournamentId].push(msg.sender);
 
         emit TicketPurchased(msg.sender, currentTournamentId);
     }
 
     function hasTicket(address user) external view returns (bool) {
-        return tickets[user];
+        return tournamentTickets[currentTournamentId][user];
     }
 
     function getCurrentTournamentId() external view returns (string memory) {
         return currentTournamentId;
     }
 
-    function getParticipants() external view returns (address[] memory) {
-        return participants;
+    function getParticipant(uint256 index) external view returns (address) {
+        return tournamentParticipants[currentTournamentId][index];
+    }
+
+    function getParticipantsCount() external view returns (uint256) {
+        return tournamentParticipants[currentTournamentId].length;
     }
 
     function startNewTournament(string memory newTournamentId) external onlyOwner {
         require(bytes(newTournamentId).length > 0, "Tournament ID required");
+        require(!startedTournaments[newTournamentId], "Tournament with this ID already exists");
+        startedTournaments[newTournamentId] = true;
         currentTournamentId = newTournamentId;
 
-        for (uint256 i = 0; i < participants.length; i++) {
-            tickets[participants[i]] = false;
-        }
-
-        delete participants;
         emit TournamentStarted(newTournamentId);
     }
 
